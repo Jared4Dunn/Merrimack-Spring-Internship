@@ -1,0 +1,934 @@
+---
+title: "Merrimack Football Analysis 2024-25 Season"
+author: "Jared Dunn"
+date: "2025-02-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Task:
+
+#During the Spring Semester, I have teamed up with the Merrimack Football Team by doing a play-by-play analysis of the last five games played from the 2024-25 season. To do so, I started by extracting the data from the team's film software called Catapult Thundercloud and created Excel spreadsheets for each game with the exact same variables. Here is the finalized version of my R-Studio Code, where I will be breaking down some key findings over the final five games of the season.
+
+
+#Game #8 Stonehill:
+
+#Fist, Let's read in our dataset that we've created.
+
+```{r}
+library(dplyr)
+
+stonehill <- read.csv("/Users/dunnzy22/Desktop/Merrimack Internship/Stonehill.csv", stringsAsFactors = FALSE)
+```
+
+#Now that we've read in our dataset, let's take a look at some of the basic infomation regarding the dataset.
+
+```{r}
+str(stonehill) #looking at the types of data we are dealing with
+head(stonehill) #Looking at the first 5 rows of our dataset
+```
+
+#As we can see, our dataset is a little messy so we can go ahead and clean it up ourselves.
+
+```{r}
+#First, let's remove all of the completely empty columns (i.e X., X.1, X.2,...), since they don't mean much to us
+
+stonehill_cleaned <- stonehill %>%
+  select_if(~sum(!is.na(.)) > 0)
+
+head(stonehill_cleaned)
+```
+
+#We want to be able to read our dataset with ease, so we are going to replace each blank entry in the Penalty_Type column with "NA", just so it is easier for us to understand.
+
+```{r}
+stonehill_cleaned <- stonehill_cleaned %>% 
+  mutate(Penalty_Type = ifelse(is.na(Penalty_Type) | Penalty_Type == "", "NA", Penalty_Type))
+
+head(stonehill_cleaned)
+```
+
+
+#Now that we've organized the data to our liking, we can go ahead and convert some of the relevant columns to numeric for analysis later on.
+
+```{r}
+stonehill_cleaned <- stonehill_cleaned %>% 
+  mutate(Down = as.numeric(Down),
+         Quarter = as.numeric(Quarter),
+         Distance = as.numeric(Distance),
+         Field_Position = as.numeric(Field_Position),
+         Gain_Loss = as.numeric(Gain_Loss),
+         Play_Type = as.factor(Play_Type))
+
+head(stonehill_cleaned)
+```
+
+#Now that we've cleaned the data, we are ready to perform some exploratory analysis to gain some instights about how the game was played.
+
+```{r}
+summary(stonehill_cleaned)
+```
+
+#As we can see from our summary statistics, the offense was on the field a total of 65 plays. We can see that our personnel ranged from 10 (1 Running Back, 0 Tight End) to 21 (2 Running Backs, 1 Tight End). The Gain_Loss variable tells us a lot about how our offense was performing that day. We can see that our biggest loss of yardage was 33 yards, but followed that up with a 49 yard gain.
+
+#After looking at our summary statistics, we can go ahead and dive into the play distribution throughout the game. 
+
+```{r}
+Play_Type_Distribution_Stonehill <- stonehill_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Frequency = n()) %>%
+  arrange(desc(Frequency))
+
+print(Play_Type_Distribution_Stonehill)
+```
+
+#As we can see from our table, this game was a heavy running day where we ran 17 midzone attempts and 12 inside zone attemps. From being on the team, I can tell you that our gameplan was simply to run the ball until they could stop us, which clearly they couldn't.
+
+#Since we are looking at play type distribution, let's check to see what personnel we used throughout the game and how frequent we were in those packages.
+
+```{r}
+Personnel_Distribution_Stonehill <- stonehill_cleaned %>% 
+  group_by(Personnel) %>% 
+  summarise(Frequency = n()) %>% 
+  arrange(desc(Frequency))
+print(Personnel_Distribution_Stonehill)
+```
+
+#We can see that our personnel grouping was very diverse, with primarily having 1 Running back with 1-2 tight ends.
+
+
+#Now that we've seen the personnel distribution throughout the game, let's look at the average gain/loss for each play type, so we can tell what worked vs. what didn't.
+
+```{r}
+Average_Gain_Loss_Stonehill <- stonehill_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>% 
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Stonehill)
+```
+
+```{r}
+
+library(ggplot2)
+
+ggplot(Average_Gain_Loss_Stonehill, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  scale_y_continuous(limits = c(-15, 30)) + # Expand y-axis
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels
+  labs(
+    title = "Average Gain/Loss by Play Type During Stonehill",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+
+```
+
+
+#It seems pretty obvious as to why the Play-Action pass averages 17 yards per attempt, due to the fact that our most frequent plays throughout the game were run plays. So, by faking the run and passing the ball, we were able to gain yards. Even though we ran inside zone 12 different times, each time we were averaging 8 yards per carry, which is very good. 
+
+
+#Now that we've seen the gain/loss distribution throughout the whole game, let's do some further analysis. We are going to look at the gain/loss distribution within two minutes from the half. In other words, the "two minute drill".
+
+
+```{r}
+Average_Gain_Loss_Last2Min_Stonehill <- stonehill_cleaned %>%
+  filter(Quarter == 2 & Play_Clock <= "2:00") %>%  # Filter for plays in Q2 within last 2 minutes
+  group_by(Play_Type) %>%
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>%
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Last2Min_Stonehill)
+
+```
+
+```{r}
+ggplot(Average_Gain_Loss_Last2Min_Stonehill, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Average Gain/Loss by Play Type (Last 2 Minutes of Q2) of Stonehill",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+
+```
+
+
+
+
+#Knowing that penalties are a big factor when contributing to gain/loss on a play, let's see how frequent we were committing these penalties, and if so what types were being committed.
+
+```{r}
+Penalties_Stonehill <- stonehill_cleaned %>% 
+  filter(Penalty == "Yes") %>% 
+  count(Penalty_Type)
+Penalties_Stonehill
+```
+
+#As we can see, there were only two penalties that our team committed during the Stonehill game, with one penalty being a Defensive facemask. By knowing what types of penalties we are committing, we can communicate that to the team to give them a heads up of where they are going wrong.
+
+#Now that we've looked at some descriptive statistics, we can go ahead and create some visualizations so it is easier for us to understand. First, let's create a scatterplot to show our gain/loss from the distance we are given. 
+
+```{r}
+ggplot(stonehill_cleaned, aes(x = Distance, y = Gain_Loss)) +
+  geom_point(color = "blue", alpha = 0.7) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Distance vs Gain/Loss for Stonehill", x = "Distance (Yards)", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+#From the visualization, we can see that we were hitting our big plays when we were facing ~ 5 yards for a first down. It makes sense becaue there is a lot less pressure on you as an offense when you are rolling down the field, versus hoping to gain a first down instead of punting the ball.
+
+#Now let's create a visualization to see how our offense gained yards based on the field position
+
+```{r}
+ggplot(stonehill_cleaned, aes(x = Field_Position, y = Gain_Loss)) +
+  geom_point(aes(size = abs(Gain_Loss), color = Gain_Loss)) +   
+  scale_color_gradient(low = "blue", high = "red") +
+  scale_y_continuous(limits = c(-40,60)) +
+  scale_size_continuous(name = "Size = Gain_Loss") +  
+  labs(title = "Field Position vs Yardage Gained During Stonehill", x = "Field Position", y = "Yardage") +
+  theme_minimal()
+```
+
+#The first takeaway is that we never had the ball inside of our own 20 yard line, which is a positive. Secondly, you can tell that most of the big offensive plays were sprouting when we were on the opponent's side of the field and nearing the redzone. Finally, we can see that there was one negative play in the redzone and all the others were positive. This is very important, since the redzone is an opportunity to put points on the scoreboard and get ahead of your opponents.
+
+#Next, let's look at our yardage gained over the 4 quarters that we played.
+
+```{r}
+ggplot(stonehill_cleaned, aes(x = Quarter, y = Gain_Loss, group = 1)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Yardage Gained Over Quarters for Stonehill", x = "Quarter", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+
+```
+
+#There is a lot to takeaway from this graph. First off, the offense never produced a negative loss in the first quarter, plus hit on a 50 yard gain on one instance. Telling by the distribution of the second quarter, not much was produced offensivly. There were no plays that gained over 20 yards, plus there were a couple of plays which resulted in negative yards. From the third quarter, we can see that there was good and bad being produced by the offense. There were 2 plays where we gained over 20 yards, but on the negative side there was a play that resulted in over a 20 yard loss. Finally, in the fourth quarter the offense started to tighted up and eliminate the negative plays. There was only one play resulting in a loss, and majority of the plays resulting in a positive gain.
+
+
+#Since we want to look at each instance of each play type, let's create a boxplot to see which plays had outliers and which plays worked a lot.
+
+```{r}
+ggplot(stonehill_cleaned, aes(x = Play_Type, y = Gain_Loss)) +
+  geom_boxplot(fill = "skyblue") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of Gain/Loss by Play Type for Stonehill", x = "Play Type", y = "Gain/Loss (Yards)")
+
+```
+
+#From out boxplot, we can see how each play type performed in their different instances being ran. We can tell that the play action pass was the best play during Stonehill, since there was never a time where it produced negative yards, plus also hit for our highest gain of the game. For the play types with a solid bar, those are plays that we only ran one time throughout the game, which there is some good and bad. We can see that Double Curls, Double Pass, and QB Draw were all ran one time and gained positive yards. Using this information, we can prepare in the future when playing Stonehill to see what they are able to defend, versus what they aren't.
+
+
+
+
+##################################################################################################################################
+
+
+#Game #9: Colgate
+
+```{r}
+colgate <- read.csv("/Users/dunnzy22/Desktop/Merrimack Internship/Colgate.csv", stringsAsFactors = FALSE)
+```
+
+#Now that we've read in our dataset, let's take a look at some of the basic infomation regarding the dataset.
+
+```{r}
+str(colgate)
+head(colgate)
+```
+
+#We want to be able to read our dataset with ease, so we are going to replace each blank entry in the Penalty_Type column with "NA", just so it is easier for us to understand.
+
+```{r}
+colgate <- colgate %>% 
+  mutate(Penalty_Type = ifelse(is.na(Penalty_Type) | Penalty_Type == "", "NA", Penalty_Type))
+
+head(colgate)
+```
+
+#Now that we've organized the data to our liking, we can go ahead and convert some of the relevant columns to numeric for analysis later on.
+
+```{r}
+colgate_cleaned <- colgate %>% 
+  mutate(Down = as.numeric(Down),
+         Quarter = as.numeric(Quarter),
+         Distance = as.numeric(Distance),
+         Field_Position = as.numeric(Field_Position),
+         Gain_Loss = as.numeric(Gain_Loss),
+         Play_Type = as.factor(Play_Type))
+
+head(colgate_cleaned)
+```
+
+#Now that we've cleaned the data, we are ready to perform some exploratory analysis to gain some instights about how the game was played.
+
+```{r}
+summary(colgate_cleaned)
+```
+
+#As stated earlier, we really want to focus on the Gain_Loss variable, since it is telling us the offensive production throughout the game. We can see that our biggest loss throughout the game was 10 yards and our biggest gain was 52 yards. We can also look at our field position, since it is telling us where we were on the field during the game.
+
+#After looking at our summary statistics, we can go ahead and dive into the play distribution throughout the game.
+
+```{r}
+Play_Type_Distribution_Colgate <- colgate_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Frequency = n()) %>%
+  arrange(desc(Frequency))
+
+print(Play_Type_Distribution_Colgate)
+```
+
+#We can see that we primarily ran the ball throughout the game, but also passed the ball sometimes. We can see that 37 plays were designated run plays, with 11 other plays being Run/Pass options (RPO / Option).  
+
+#Since we are looking at play type distribution, let's check to see what personnel we used throughout the game and how frequent we were in those packages.
+
+```{r}
+Personnel_Distribution_Colgate <- colgate_cleaned %>% 
+  group_by(Personnel) %>% 
+  summarise(Frequency = n()) %>% 
+  arrange(desc(Frequency))
+print(Personnel_Distribution_Colgate)
+```
+
+#During the Colgate game, we can tell that we relied heavily on the Tight End's for run support, since we were running it a ton. We can see that we spent majority of the game in 11 personnel (1 Running Back / 1 Tight End) and mixed in some 12 personnel (1 Running Back / 2 Tight Ends).
+
+
+#Now that we've seen the personnel distribution throughout the game, let's look at the average gain/loss for each play type, so we can tell what worked vs. what didn't.
+
+```{r}
+Average_Gain_Loss_Colgate <- colgate_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>% 
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Colgate)
+```
+
+```{r}
+ggplot(Average_Gain_Loss_Colgate, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "maroon") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  scale_y_continuous(limits = c(-15, 30)) + # Expand y-axis
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels
+  labs(
+    title = "Average Gain/Loss by Play Type During Colgate",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+```
+
+#From this visual, we can see that our passing game was working better than our run game. RB screen, Throwback Pass, normall pass plays, and Play Action pass all average above 10 yards of gain throughout the game. It is interesting to see how from our first game, the run game was working better than this game. Depending on the defensive gameplan, they could've seen our film from a week prior and prepped for the run during this game.
+
+#Now that we've seen the gain/loss distribution throughout the whole game, let's do some further analysis. We are going to look at the gain/loss distribution within two minutes from the half. In other words, the "two minute drill".
+
+```{r}
+Average_Gain_Loss_Last2Min_Colgate <- colgate_cleaned %>%
+  filter(Quarter == 2 & Play_Clock <= "2:00") %>%  # Filter for plays in Q2 within last 2 minutes
+  group_by(Play_Type) %>%
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>%
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Last2Min_Colgate)
+```
+
+
+```{r}
+ggplot(Average_Gain_Loss_Last2Min_Colgate, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "maroon") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Average Gain/Loss by Play Type During Two Minute Drill (Last 2 Minutes of Q2)",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+
+```
+
+
+
+
+
+#Knowing that penalties are a big factor when contributing to gain/loss on a play, let's see how frequent we were committing these penalties, and if so what types were being committed.
+
+```{r}
+Penalties_Colgate <- colgate_cleaned %>% 
+  filter(Penalty == "Yes") %>% 
+  count(Penalty_Type)
+Penalties_Colgate
+```
+
+
+#Out of the 69 offensive snaps took during the Colgate game, our offensive only committed one penalty, which was holding. This is important when talking about a team's success, since you are looking for gain rather than loss. By limiting the amount of penalties, we can eliminate the loss, and focus on the gain.
+
+
+#Now that we've looked at some descriptive statistics, we can go ahead and create some visualizations so it is easier for us to understand. First, let's create a scatterplot to show our gain/loss from the distance we are given. 
+
+
+```{r}
+ggplot(colgate_cleaned, aes(x = Distance, y = Gain_Loss)) +
+  geom_point(color = "orange", alpha = 0.7) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Distance vs Gain/Loss for Colgate", x = "Distance (Yards)", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+#From our visualization we can see that there is quite a bit of a difference from the Stonehill game and the Colgate game. In the Stonehill game, majority of the big gain plays were happening when we faced short/medium yardage situations. In this game, we can see that some of our big plays were when we were faced with short yardage, but most of the big gains came from long distance plays. We can see that there is a play where we gained over 50 yards when 10 yards away from a first down. We can also see some outliers, where we were 20 yards away with a first down, yet we managed to gain over 30 yards in a play. 
+
+#Now let's create a visualization to see how our offense gained yards based on the field position
+
+```{r}
+ggplot(colgate_cleaned, aes(x = Field_Position, y = Gain_Loss)) +
+  geom_point(aes(size = abs(Gain_Loss), color = Gain_Loss)) +   
+  scale_color_gradient(low = "blue", high = "red") +
+  scale_y_continuous(limits = c(-20,60)) +
+  scale_size_continuous(name = "Size = Gain_Loss") +  
+  labs(title = "Field Position vs Yardage Gained During RMU", x = "Field Position", y = "Yardage") +
+  theme_minimal()
+```
+
+#I tend to always look at the negative side first, since that is when the offense has the ball on their own side of the field. In doing so, you can see that majority of the plays that were run inside of our own 50 yards were positive gains, with one of them reaching a 50 yard gain. As stated in the prior game, the goal of being in the redzone (inside the opponents 20 yards) is to eliminate the negative plays, so that you are able to gain yards and score points. We can see that the majority of plays inside the redzone were positive gains, with 1 instance being a negative gain. Overall, this graph shows that the offense was gaining positive yards rather than being in the negative.
+
+#Next, let's look at our yardage gained over the 4 quarters that we played.
+
+```{r}
+ggplot(colgate_cleaned, aes(x = Quarter, y = Gain_Loss, group = 1)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Yardage Gained Over Quarters for Colgate", x = "Quarter", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+#Differently from the Stonehill game, this visualization shows the complete opposite turn of events for the offense. We can see that in the first quarter, there was not a ton of yards being gained, although they were not losing yards. In the second quarter, we can see that there were plays were we gained a ton of yards, but were also having plays resulting in negative yards. The third quarter was our best quarter this game, since we found a way to eliminate the negative plays and really start to move the ball. Finally, the fourth quarter was a lot similar to the first quarter, but the offense found a way to cut out the negative plays as well.
+
+#Since we want to look at each instance of each play type, let's create a boxplot to see which plays had outliers and which plays worked a lot.
+
+```{r}
+ggplot(colgate_cleaned, aes(x = Play_Type, y = Gain_Loss)) +
+  geom_boxplot(fill = "maroon") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of Gain/Loss by Play Type for Colgate", x = "Play Type", y = "Gain/Loss (Yards)")
+```
+
+
+##################################################################################################################################
+
+#Game #10: Robert Morris
+
+
+#Let's read in the dataset for the Robert Morris (RMU) game 
+```{r}
+RMU <- read.csv("/Users/dunnzy22/Desktop/Merrimack Internship/RMU.csv", stringsAsFactors = FALSE)
+```
+
+#Now that we've read in our dataset, let's take a look at some of the basic infomation regarding the dataset.
+
+```{r}
+str(RMU)
+head(RMU)
+```
+
+#We want to be able to read our dataset with ease, so we are going to replace each blank entry in the Penalty_Type column with "NA", just so it is easier for us to understand
+
+```{r}
+RMU <- RMU %>% 
+  mutate(Penalty_Type = ifelse(is.na(Penalty_Type) | Penalty_Type == "", "NA", Penalty_Type))
+
+head(RMU)
+```
+
+#Now that we've organized the data to our liking, we can go ahead and convert some of the relevant columns to numeric for analysis later on.
+
+```{r}
+RMU_cleaned <- RMU %>% 
+  mutate(Down = as.numeric(Down),
+         Quarter = as.numeric(Quarter),
+         Distance = as.numeric(Distance),
+         Field_Position = as.numeric(Field_Position),
+         Gain_Loss = as.numeric(Gain_Loss),
+         Play_Type = as.factor(Play_Type))
+
+head(RMU_cleaned)
+```
+
+#Now that we've cleaned the data, we are ready to perform some exploratory analysis to gain some instights about how the game was played.
+
+```{r}
+summary(RMU_cleaned)
+```
+
+#After looking at our summary statistics, we can go ahead and dive into the play distribution throughout the game.
+
+```{r}
+Play_Type_Distribution_RMU <- RMU_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Frequency = n()) %>%
+  arrange(desc(Frequency))
+
+print(Play_Type_Distribution_RMU)
+```
+
+#Since we are looking at play type distribution, let's check to see what personnel we used throughout the game and how frequent we were in those packages.
+
+```{r}
+Personnel_Distribution_RMU <- RMU_cleaned %>% 
+  group_by(Personnel) %>% 
+  summarise(Frequency = n()) %>% 
+  arrange(desc(Frequency))
+print(Personnel_Distribution_RMU)
+```
+
+#Now that we've seen the personnel distribution throughout the game, let's look at the average gain/loss for each play type, so we can tell what worked vs. what didn't.
+
+```{r}
+Average_Gain_Loss_RMU <- RMU_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>% 
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_RMU)
+```
+
+```{r}
+ggplot(Average_Gain_Loss_RMU, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "navy") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  scale_y_continuous(limits = c(-15, 30)) + # Expand y-axis
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels
+  labs(
+    title = "Average Gain/Loss by Play Type During RMU",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+```
+
+#From our graph, we have a couple of takeaways to note. First, the throwback pass was the highest averaged play, yet it was a last minute play in attempt to win the game. Secondly, the play choice was very diverse, which ultimately led to averaging positive for all except two play types. We were able to establish the run game from duo, plus set up the QB draw with our pass game. You could say that the defense had watched our game the week prior and prepared for a passing game, but instead our run game was more dominant.
+
+
+#Now that we've seen the gain/loss distribution throughout the whole game, let's do some further analysis. We are going to look at the gain/loss distribution within two minutes from the half. In other words, the "two minute drill".
+
+```{r}
+Average_Gain_Loss_Last2Min_RMU <- RMU_cleaned %>%
+  filter(Quarter == 2 & Play_Clock <= "2:00") %>%  # Filter for plays in Q2 within last 2 minutes
+  group_by(Play_Type) %>%
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>%
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Last2Min_RMU)
+```
+
+```{r}
+ggplot(Average_Gain_Loss_Last2Min_RMU, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "navy") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Average Gain/Loss by Play Type During Two Minute Drill (Last 2 Minutes of Q2)",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+```
+
+#Knowing that penalties are a big factor when contributing to gain/loss on a play, let's see how frequent we were committing these penalties, and if so what types were being committed.
+
+```{r}
+Penalties_RMU <- RMU_cleaned %>% 
+  filter(Penalty == "Yes") %>% 
+  count(Penalty_Type)
+Penalties_RMU
+```
+
+#As you can see, we committed two offensive holdings, which set us back 10 yards. As stated prior, by limiting the number of penalties the offense commits every game, it is easier to focus on gaining yard instead of backing up.
+
+
+#Now that we've looked at some descriptive statistics, we can go ahead and create some visualizations so it is easier for us to understand. First, let's create a scatterplot to show our gain/loss from the distance we are given. 
+
+```{r}
+ggplot(RMU_cleaned, aes(x = Distance, y = Gain_Loss)) +
+  geom_point(color = "red", alpha = 0.7) +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) +
+  labs(title = "Distance vs Gain/Loss for RMU", x = "Distance (Yards)", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(RMU_cleaned, aes(x = Field_Position, y = Gain_Loss)) +
+  geom_point(aes(size = abs(Gain_Loss), color = Gain_Loss)) +   
+  scale_color_gradient(low = "blue", high = "red") +
+  scale_y_continuous(limits = c(-15, 30)) +
+  scale_size_continuous(name = "Size = Gain_Loss") +  
+  labs(title = "Field Position vs Yardage Gained During RMU", x = "Field Position", y = "Yardage") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(RMU_cleaned, aes(x = Quarter, y = Gain_Loss, group = 1)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Yardage Gained Over Quarters for RMU", x = "Quarter", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(RMU_cleaned, aes(x = Play_Type, y = Gain_Loss)) +
+  geom_boxplot(fill = "green") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of Gain/Loss by Play Type for RMU", x = "Play Type", y = "Gain/Loss (Yards)")
+```
+
+##################################################################################################################################
+
+#Game #11: Sacred Heart
+
+#Let's go ahead and load in the csv file we created for the Sacred Heart (SHU) Game
+
+```{r}
+SHU <- read.csv("/Users/dunnzy22/Desktop/Merrimack Internship/Sacred_Heart.csv", stringsAsFactors = FALSE)
+```
+
+#Now that we've read in our dataset, let's take a look at some of the basic infomation regarding the dataset.
+
+```{r}
+str(SHU)
+head(SHU)
+```
+
+#We want to be able to read our dataset with ease, so we are going to replace each blank entry in the Penalty_Type column with "NA", just so it is easier for us to understand
+
+```{r}
+SHU <- SHU %>% 
+  mutate(Penalty_Type = ifelse(is.na(Penalty_Type) | Penalty_Type == "", "NA", Penalty_Type))
+
+head(SHU)
+```
+
+#Now that we've organized the data to our liking, we can go ahead and convert some of the relevant columns to numeric for analysis later on.
+
+```{r}
+SHU_cleaned <- SHU %>% 
+  mutate(Down = as.numeric(Down),
+         Quarter = as.numeric(Quarter),
+         Distance = as.numeric(Distance),
+         Field_Position = as.numeric(Field_Position),
+         Gain_Loss = as.numeric(Gain_Loss),
+         Play_Type = as.factor(Play_Type))
+
+head(SHU_cleaned)
+```
+
+#Now that we've cleaned the data, we are ready to perform some exploratory analysis to gain some instights about how the game was played.
+
+```{r}
+summary(SHU_cleaned)
+```
+
+#After looking at our summary statistics, we can go ahead and dive into the play distribution throughout the game.
+
+```{r}
+Play_Type_Distribution_SHU <- SHU_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Frequency = n()) %>%
+  arrange(desc(Frequency))
+
+print(Play_Type_Distribution_SHU)
+```
+
+#Since we are looking at play type distribution, let's check to see what personnel we used throughout the game and how frequent we were in those packages.
+
+```{r}
+Personnel_Distribution_SHU <- SHU_cleaned %>% 
+  group_by(Personnel) %>% 
+  summarise(Frequency = n()) %>% 
+  arrange(desc(Frequency))
+print(Personnel_Distribution_SHU)
+```
+
+#The key takeaway here is that we were primarily in 11 personnel (1 Running Back / 1 Tight End) for the majority of the game. Let's see what plays were working.
+
+#Now that we've seen the personnel distribution throughout the game, let's look at the average gain/loss for each play type, so we can tell what worked vs. what didn't.
+
+```{r}
+Average_Gain_Loss_SHU <- SHU_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>% 
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_SHU)
+```
+
+```{r}
+ggplot(Average_Gain_Loss_SHU, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "red") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  scale_y_continuous(limits = c(-15, 30)) + # Expand y-axis
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels
+  labs(
+    title = "Average Gain/Loss by Play Type During SHU",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+```
+
+#Comparing to prior gain/loss visualizations, it seems that this game was a struggle for the offense, with only three of the play types averaging over 10 yards. Towards the end of the graph, we can see that outside zone, RPO, QB counter, Throwback Pass, and RB Screen were all averaging negative yards. We can see that our run game was working, with toss, sweep, and visor all averaging above 10 yards.
+
+
+#Now that we've seen the gain/loss distribution throughout the whole game, let's do some further analysis. We are going to look at the gain/loss distribution within two minutes from the half. In other words, the "two minute drill".
+
+```{r}
+Average_Gain_Loss_Last2Min_SHU <- SHU_cleaned %>%
+  filter(Quarter == 2 & Play_Clock <= "2:00") %>%  # Filter for plays in Q2 within last 2 minutes
+  group_by(Play_Type) %>%
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>%
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Last2Min_SHU)
+```
+
+```{r}
+ggplot(Average_Gain_Loss_Last2Min_SHU, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "red") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Average Gain/Loss by Play Type During Two Minute Drill (Last 2 Minutes of Q2)",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+```
+
+
+
+
+#Knowing that penalties are a big factor when contributing to gain/loss on a play, let's see how frequent we were committing these penalties, and if so what types were being committed.
+
+```{r}
+Penalties_SHU <- SHU_cleaned %>% 
+  filter(Penalty == "Yes") %>% 
+  count(Penalty_Type)
+Penalties_SHU
+```
+
+#As you can see, this game we committed a ton of offensive penalties, ending the game with 6 penalties. The offense caught a break, since the defense committed a personal foul, which is 15 yards gained for us. But, there were more offensive penalties committed this game than in any other game, by a lot. 
+
+
+#Now that we've looked at some descriptive statistics, we can go ahead and create some visualizations so it is easier for us to understand. First, let's create a scatterplot to show our gain/loss from the distance we are given. 
+
+```{r}
+ggplot(SHU_cleaned, aes(x = Distance, y = Gain_Loss)) +
+  geom_point(color = "magenta", alpha = 0.7) +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) +
+  labs(title = "Distance vs Gain/Loss for SHU", x = "Distance (Yards)", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(SHU_cleaned, aes(x = Field_Position, y = Gain_Loss)) +
+  geom_point(aes(size = abs(Gain_Loss), color = Gain_Loss)) + 
+  scale_color_gradient(low = "blue", high = "red") +
+  scale_y_continuous(limits = c(-55, 40)) +
+  scale_size_continuous(name = "Size = Gain_Loss") +  
+  labs(title = "Field Position vs Yardage Gained During SHU", x = "Field Position", y = "Yardage") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(SHU_cleaned, aes(x = Quarter, y = Gain_Loss, group = 1)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Yardage Gained Over Quarters for SHU", x = "Quarter", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(SHU_cleaned, aes(x = Play_Type, y = Gain_Loss)) +
+  geom_boxplot(fill = "red") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of Gain/Loss by Play Type for SHU", x = "Play Type", y = "Gain/Loss (Yards)")
+```
+
+
+#################################################################################################################################################
+
+#Game #12: Fordham
+
+#Let's go ahead and load in the csv file that we created for the Fordham game
+
+```{r}
+Fordham <- read.csv("/Users/dunnzy22/Desktop/Merrimack Internship/Fordham.csv", stringsAsFactors = FALSE)
+```
+
+#Now that we've read in our dataset, let's take a look at some of the basic infomation regarding the dataset.
+
+```{r}
+str(Fordham)
+head(Fordham)
+```
+
+#We want to be able to read our dataset with ease, so we are going to replace each blank entry in the Penalty_Type column with "NA", just so it is easier for us to understand
+
+```{r}
+Fordham <- Fordham %>% 
+  mutate(Penalty_Type = ifelse(is.na(Penalty_Type) | Penalty_Type == "", "NA", Penalty_Type))
+
+head(Fordham)
+```
+
+#Now that we've organized the data to our liking, we can go ahead and convert some of the relevant columns to numeric for analysis later on.
+
+```{r}
+Fordham_cleaned <- Fordham %>% 
+  mutate(Down = as.numeric(Down),
+         Quarter = as.numeric(Quarter),
+         Distance = as.numeric(Distance),
+         Field_Position = as.numeric(Field_Position),
+         Gain_Loss = as.numeric(Gain_Loss),
+         Play_Type = as.factor(Play_Type))
+
+head(Fordham_cleaned)
+```
+
+#Now that we've cleaned the data, we are ready to perform some exploratory analysis to gain some instights about how the game was played.
+
+```{r}
+summary(Fordham_cleaned)
+```
+
+#After looking at our summary statistics, we can go ahead and dive into the play distribution throughout the game.
+
+```{r}
+Play_Type_Distribution_Fordham <- Fordham_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Frequency = n()) %>%
+  arrange(desc(Frequency))
+
+print(Play_Type_Distribution_Fordham)
+```
+
+#Since we are looking at play type distribution, let's check to see what personnel we used throughout the game and how frequent we were in those packages.
+
+```{r}
+Personnel_Distribution_Fordham <- Fordham_cleaned %>% 
+  group_by(Personnel) %>% 
+  summarise(Frequency = n()) %>% 
+  arrange(desc(Frequency))
+print(Personnel_Distribution_Fordham)
+```
+
+#Now that we've seen the personnel distribution throughout the game, let's look at the average gain/loss for each play type, so we can tell what worked vs. what didn't.
+
+```{r}
+Average_Gain_Loss_Fordham <- Fordham_cleaned %>% 
+  group_by(Play_Type) %>% 
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>% 
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Fordham)
+```
+
+```{r}
+ggplot(Average_Gain_Loss_Fordham, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "orange") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  scale_y_continuous(limits = c(-15, 30)) + # Expand y-axis
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + # Rotate x-axis labels
+  labs(
+    title = "Average Gain/Loss by Play Type During Fordham",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+```
+
+#From the visualization, we can see that the reverse was the highest averaged play type for the offense, but it was only ran one time, so that might be decieving. Other than that, we can see that our offense was performing pretty well, with 3 play types averaging over 10 yards (excluding the reverse). We can also see that even though we ran an RPO 11 times throughout the game, we averaged around 8 yards per attempt, which is very good.
+
+#Now that we've seen the gain/loss distribution throughout the whole game, let's do some further analysis. We are going to look at the gain/loss distribution within two minutes from the half. In other words, the "two minute drill".
+
+```{r}
+Average_Gain_Loss_Last2Min_Fordham <- Fordham_cleaned %>%
+  filter(Quarter == 2 & Play_Clock <= "2:00") %>%  # Filter for plays in Q2 within last 2 minutes
+  group_by(Play_Type) %>%
+  summarise(Average_Gain_Loss = mean(Gain_Loss, na.rm = TRUE)) %>%
+  arrange(desc(Average_Gain_Loss))
+
+print(Average_Gain_Loss_Last2Min_Fordham)
+```
+
+```{r}
+ggplot(Average_Gain_Loss_Last2Min_Fordham, aes(x = reorder(Play_Type, -Average_Gain_Loss), y = Average_Gain_Loss)) +
+  geom_bar(stat = "identity", fill = "orange") +
+  geom_hline(yintercept = 0, color = "black", linetype = "dashed") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(
+    title = "Average Gain/Loss by Play Type During Two Minute Drill (Last 2 Minutes of Q2)",
+    x = "Play Type",
+    y = "Average Gain/Loss (Yards)"
+  )
+```
+
+
+
+#Knowing that penalties are a big factor when contributing to gain/loss on a play, let's see how frequent we were committing these penalties, and if so what types were being committed.
+
+```{r}
+Penalties_Fordham <- Fordham_cleaned %>% 
+  filter(Penalty == "Yes") %>% 
+  count(Penalty_Type)
+Penalties_Fordham
+```
+
+#As stated in the prior game, the number of offensive penalties increased as the end of the season was nearing. In the end, the offense lost 40 yards just to penalties, which sets our gain way back.
+
+#Now that we've looked at some descriptive statistics, we can go ahead and create some visualizations so it is easier for us to understand. First, let's create a scatterplot to show our gain/loss from the distance we are given. 
+
+```{r}
+ggplot(Fordham_cleaned, aes(x = Distance, y = Gain_Loss)) +
+  geom_point(color = "magenta", alpha = 0.7) +
+  geom_smooth(method = "lm", color = "blue", se = FALSE) +
+  labs(title = "Distance vs Gain/Loss for Fordham", x = "Distance (Yards)", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(Fordham_cleaned, aes(x = Field_Position, y = Gain_Loss)) +
+  geom_point(aes(size = abs(Gain_Loss), color = Gain_Loss)) +   
+  scale_color_gradient(low = "blue", high = "red") +
+  scale_size_continuous(name = "Size = Gain_Loss") +  
+  labs(title = "Field Position vs Yardage Gained During Fordham", x = "Field Position", y = "Yardage") +
+  theme_minimal()
+```
+
+
+```{r}
+ggplot(Fordham_cleaned, aes(x = Quarter, y = Gain_Loss, group = 1)) +
+  geom_line(color = "blue") +
+  geom_point(color = "red") +
+  labs(title = "Yardage Gained Over Quarters for Fordham", x = "Quarter", y = "Gain/Loss (Yards)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(Fordham_cleaned, aes(x = Play_Type, y = Gain_Loss)) +
+  geom_boxplot(fill = "pink") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Distribution of Gain/Loss by Play Type for Fordham", x = "Play Type", y = "Gain/Loss (Yards)")
+```
+
+
+
